@@ -1,0 +1,15 @@
+Tests Needed To Be Complete
+RangeFinder use tests
+
+Gyroscope use tests
+
+Motor control
+	Turning wheels
+	Actual Motion 
+Push sensors 
+	directional input
+State switchs
+
+Navigate towards beacon
+
+Obstacle avoidance
