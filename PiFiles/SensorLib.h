@@ -7,6 +7,7 @@
 #include <functional>
 #include <cmath>
 #include <bitset>
+#include <functional>
 
 #ifndef SENSOR_NAME
 #define SENSOR_NAME sensor
@@ -144,4 +145,30 @@ inline void interrupt(int gpio, int level, uint32_t tick){
 	SENSOR_NAME->intHandler(gpio, level, tick);
 }
 
+
+class Wheel{
+public:
+
+	Wheel(uint8_t address, uint8_t bus);
+
+	void turnWheel(float degrees, uint8_t direction, std::function<void(bool)> callback);
+	void resetRotation(std::function<void(bool)> callback);
+	void setRotation(float degrees, std::function<void(bool)> callback);
+	float getRotation();
+	void getRotaitonAsync(std::function<void(bool)> callback);
+
+	void move(float revolutions, std::function<void(bool)> callback);
+	float getPosition();
+	void getPositionAsync(std::function<void(bool)> callback);
+	void drive();
+	void stop();
+
+
+
+private:
+	uint8_t _bus;
+	uint8_t _address;
+	
+
+}
 #endif
