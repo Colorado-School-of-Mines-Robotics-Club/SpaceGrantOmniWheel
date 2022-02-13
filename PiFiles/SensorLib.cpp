@@ -206,3 +206,197 @@ void Sensor::getHeadingRSSI(float& heading, uint8_t& rssi){
 	rssi = getRSSI();
 }
 
+
+
+
+
+
+
+
+Wheel::Wheel(uint8_t address, uint8_t bus, uint8_t interruptPin){
+	_address = address;
+	_bus = bus;
+	Wheel::interruptPin = interruptPin;
+
+
+	uint8_t data = *(uint8_t*)readData(HANDSHAKE_REGISTER, 1);
+
+	// Make sure data is correct
+	if(data != _address){
+		std::cerr << "Wheel handshake failed" << std::endl;
+		std::cerr << "Expected: " << (int)_address << std::endl;
+		std::cerr << "Got:      " << (int)data << std::endl;
+		return;
+	}
+
+	// Tell user everything is ok
+	std::cout << "Succesfully connected to wheel at " << (int)address << std::endl;
+
+	// Set interrupt
+	gpioSetAlertFunc(interruptPin, interrupt);
+}
+
+Wheel::~Wheel(){
+	gpioSetAlertFunc(interruptPin, NULL);
+}
+
+void Wheel::writeData(uint8_t reg, void* data, uint8_t length){
+	// Open I2C bus
+	int8_t handle = i2cOpen(_bus, _address, 0);
+
+	// Make sure connection has been established
+	if(handle < 0){
+		std::cerr << "Unable to connect to wheel at " << (int)_address << std::endl;
+		return;
+	}
+	
+	// Read data
+	i2cWriteI2CBlockData(handle, reg, (char*)data, length);
+
+	// Close I2C bus
+	i2cClose(handle);
+}
+
+void Wheel::writeRegister(uint8_t reg){
+	// Open I2C bus
+	int8_t handle = i2cOpen(_bus, _address, 0);
+
+	// Make sure connection has been established
+	if(handle < 0){
+		std::cerr << "Unable to connect to wheel at " << (int)_address << std::endl;
+		return;
+	}
+	
+	// Read data
+	i2cWriteByte(handle, reg);
+
+	// Close I2C bus
+	i2cClose(handle);
+}
+
+void Wheel::writeRegister(uint8_t reg, uint8_t data){
+	// Open I2C bus
+	int8_t handle = i2cOpen(_bus, _address, 0);
+
+	// Make sure connection has been established
+	if(handle < 0){
+		std::cerr << "Unable to connect to wheel at " << (int)_address << std::endl;
+		return;
+	}
+	
+	// Read data
+	i2cWriteByteData(handle, reg, data);
+
+	// Close I2C bus
+	i2cClose(handle);
+}
+	
+
+void* Wheel::readData(uint8_t reg, uint8_t length){
+	// Open I2C bus
+	int8_t handle = i2cOpen(_bus, _address, 0);
+
+	// Make sure connection has been established
+	if(handle < 0){
+		std::cerr << "Unable to connect to wheel at " << (int)_address << std::endl;
+		return nullptr;
+	}
+	
+	char* data = new char[length];
+	
+	// Read data
+	i2cReadI2CBlockData(handle, reg, data, length);
+
+	// Close I2C bus
+	i2cClose(handle);
+
+	return (void*)data;
+
+}
+
+
+int8_t Wheel::turnWheel(float degrees, std::function<void(int8_t)> callback){
+	if(_state == INT_STATE_NONE) return ERROR_BUSY;
+
+	degrees = degrees/360;
+
+	writeData(TURN_REGISTER, &degrees, sizeof(degrees));
+	
+	intCallback = callback;
+	_state = INT_STATE;
+
+	return 0;
+}
+
+int8_t Wheel::resetRotation(std::function<void(int8_t)> callback){
+	if(_state == INT_STATE_NONE) return ERROR_BUSY;
+
+	writeRegister(RESET_ROTATION_REGISTER);
+
+	intCallback = callback;
+	_state = INT_STATE;
+
+	return 0;
+}
+
+
+
+int8_t Wheel::setRotation(float degrees, std::function<void(int8_t)> callback){
+	if(_state == INT_STATE_NONE) return ERROR_BUSY;
+
+	degrees = degrees/360;
+
+	writeData(SET_ROTATION_REGISTER, &degrees, sizeof(degrees));
+
+	intCallback = callback;
+	_state = INT_STATE;
+
+	return 0;
+}
+
+
+float Wheel::getRotation(){
+	return *(float*)readData(GET_ROTATION_REGISTER, sizeof(float));
+}
+
+
+int8_t Wheel::move(float revolutions, std::function<void(int8_t)> callback){
+	if(_state == INT_STATE_NONE) return ERROR_BUSY;
+
+	writeData(MOVE_REGISTER, &revolutions, sizeof(revolutions));
+
+	intCallback = callback;
+	_state = INT_STATE;
+
+	return 0;
+}
+
+
+void Wheel::drive(){
+	writeRegister(DRIVE_REGISTER);
+}
+
+void Wheel::stop(){
+	writeRegister(STOP_REGISTER);
+}
+
+float Wheel::getPosition(){
+	return *(float*)readData(GET_POSITION_REGISTER, sizeof(float));
+}
+
+
+void Wheel::intHandler(int gpio, int level, uint32_t tick){
+	// Make sure we are expecting data
+	if(_state == INT_STATE_NONE) {
+		// If we arent expecting data just read the register to clear the interrupt and exit the function
+		readData(RESPONSE_REGISTER, 1);
+		return;
+	}
+
+	// Clear the current state
+	_state = INT_STATE_NONE;
+
+	// Call the callback function with the data recieved
+	intCallback(*(int8_t*)readData(RESPONSE_REGISTER, 1));
+}
+
